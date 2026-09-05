@@ -2,172 +2,243 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
-use App\Traits\ApiResponser;
-use Illuminate\Http\Request;
-use App\Http\Controllers\Controller;
-use Illuminate\Support\Facades\Auth;
-use App\Models\AssignProject;
 use App\Models\Project;
-use App\Models\Utility;
-use App\Models\Tag;
 use App\Models\ProjectTask;
+use App\Models\ProjectUser;
 use App\Models\TimeTracker;
 use App\Models\TrackPhoto;
+use App\Models\Utility;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
-
+use Illuminate\Support\Str;
 
 class ApiController extends Controller
 {
-    //
-    use ApiResponser;
+    use \App\Traits\ApiResponser;
 
     public function login(Request $request)
     {
         $attr = $request->validate([
-            'email' => 'required|string|email|',
-            'password' => 'required|string'
+            'email' => 'required|string|email',
+            'password' => 'required|string',
         ]);
 
         if (!Auth::attempt($attr)) {
             return $this->error('Credentials not match', 401);
         }
 
-        $settings              = Utility::settings(auth()->user()->id);
+        $user = auth()->user();
 
-        $settings = [
-            'shot_time'=> isset($settings['interval_time'])?$settings['interval_time']:0.5,
-        ];
+        if ((isset($user->delete_status) && (int) $user->delete_status === 0)
+            || (isset($user->is_active) && (int) $user->is_active === 0)) {
+            Auth::logout();
+            return $this->error('Account is inactive', 403);
+        }
+
+        $settings = Utility::settings($user->id);
+
         return $this->success([
-            'token' => auth()->user()->createToken('API Token')->plainTextToken,
-            'user'=>auth()->user(),
-            'settings' =>$settings,
-        ],'Login successfully.');
+            'token' => $user->createToken('API Token')->plainTextToken,
+            'user' => $user,
+            'settings' => [
+                'shot_time' => isset($settings['interval_time']) ? $settings['interval_time'] : 0.5,
+            ],
+        ], 'Login successfully.');
     }
+
     public function logout()
     {
         auth()->user()->tokens()->delete();
-        return $this->success([],'Tokens Revoked');
+
+        return $this->success([], 'Tokens Revoked');
     }
 
-    public function getProjects(Request $request){
+    public function getProjects(Request $request)
+    {
         $user = auth()->user();
 
-        if($user->isUser())
-        {
-            $assign_pro_ids = ProjectUser::where('user_id',$user->id)->pluck('project_id');
-            $project_s      = Project::with('tasks')->select(
-                [
-                    'project_name',
-                    'id',
-                    'client_id',
-                ]
-            )->whereIn('id', $assign_pro_ids)->get()->toArray();
+        if ($user->isUser()) {
+            $assignProjectIds = ProjectUser::where('user_id', $user->id)->pluck('project_id');
 
+            $projects = Project::with('tasks')
+                ->select(['project_name', 'id', 'client_id'])
+                ->whereIn('id', $assignProjectIds)
+                ->get()
+                ->toArray();
+        } else {
+            $projects = Project::with('tasks')
+                ->select(['project_name', 'id', 'client_id'])
+                ->where('created_by', $user->id)
+                ->get()
+                ->toArray();
         }
-        else
 
-        {
-            $project_s = Project::with('tasks')->select(
-                [
-                    'project_name',
-                    'id',
-                    'client_id',
-                ]
-            )->where('created_by', $user->id)->get()->toArray();
-
-        }
         return $this->success([
-            'projects' => $project_s,
-        ],'Get Project List successfully.');
+            'projects' => $projects,
+        ], 'Get Project List successfully.');
     }
 
-    public function addTracker(Request $request){
-
+    public function addTracker(Request $request)
+    {
         $user = auth()->user();
-        if($request->has('action') && $request->action == 'start'){
 
-            $validatorArray = [
+        if ($request->has('action') && $request->action === 'start') {
+            $validator = Validator::make($request->all(), [
                 'task_id' => 'required|integer',
-            ];
-            $validator      = \Validator::make(
-                $request->all(), $validatorArray
-            );
-            if($validator->fails())
-            {
-                return $this->error($validator->errors()->first(), 401);
-            }
-            $task= ProjectTask::find($request->task_id);
+                'time' => 'nullable|date',
+                'is_billable' => 'nullable|boolean',
+                'workin_on' => 'nullable|string|max:255',
+            ]);
 
-            if(empty($task)){
-                return $this->error('Invalid task', 401);
+            if ($validator->fails()) {
+                return $this->error($validator->errors()->first(), 422);
             }
 
-            $project_id = isset($task->project_id)?$task->project_id:'';
-            TimeTracker::where('created_by', '=', $user->id)->where('is_active', '=', 1)->update(['end_time' => date("Y-m-d H:i:s")]);
+            $task = ProjectTask::find($request->task_id);
 
-            $track['name']        = $request->has('workin_on') ? $request->input('workin_on') : '';
-            $track['project_id']  = $project_id;
-            $track['is_billable'] =  $request->has('is_billable')? $request->is_billable:0;
-            $track['tag_id']      = $request->has('workin_on') ? $request->input('workin_on') : '';
-            $track['start_time']  = $request->has('time') ?  date("Y-m-d H:i:s",strtotime($request->input('time'))) : date("Y-m-d H:i:s");
-            $track['task_id']     = $request->has('task_id') ? $request->input('task_id') : '';
-            $track['created_by']  = $user->id;
-            $track                = TimeTracker::create($track);
-            $track->action        ='start';
+            if (!$task || !$this->canAccessProject($user, $task->project_id)) {
+                return $this->error('Invalid task', 404);
+            }
 
-            return $this->success( $track,'Track successfully create.');
-        }else{
-            $validatorArray = [
-                'task_id' => 'required|integer',
-                'traker_id' =>'required|integer',
-            ];
-            $validator      = Validator::make(
-                $request->all(), $validatorArray
-            );
-            if($validator->fails())
-            {
-                return Utility::error_res($validator->errors()->first());
-            }
-            $tracker = TimeTracker::where('id',$request->traker_id)->first();
-            // dd($tracker);
-            if($tracker)
-            {
-                $tracker->end_time   = $request->has('time') ?  date("Y-m-d H:i:s",strtotime($request->input('time'))) : date("Y-m-d H:i:s");
-                $tracker->is_active  = 0;
-                $tracker->total_time = Utility::diffance_to_time($tracker->start_time, $tracker->end_time);
-                $tracker->save();
-                return $this->success( $tracker,'Stop time successfully.');
-            }
+            TimeTracker::where('created_by', $user->id)
+                ->where('is_active', 1)
+                ->update([
+                    'end_time' => now(),
+                    'is_active' => 0,
+                ]);
+
+            $tracker = TimeTracker::create([
+                'name' => $request->input('workin_on', ''),
+                'project_id' => $task->project_id,
+                'is_billable' => $request->boolean('is_billable'),
+                'tag_id' => $request->input('workin_on', ''),
+                'start_time' => $request->filled('time')
+                    ? date('Y-m-d H:i:s', strtotime($request->input('time')))
+                    : now(),
+                'task_id' => $task->id,
+                'created_by' => $user->id,
+            ]);
+
+            $tracker->action = 'start';
+
+            return $this->success($tracker, 'Track successfully create.');
         }
 
+        return $this->stopTracker($request);
     }
-    public function uploadImage(Request $request){
-        $user = auth()->user();
-        $image_base64 = base64_decode($request->img);
-        $file =$request->imgName;
-        if($request->has('tracker_id') && !empty($request->tracker_id)){
-            $app_path = storage_path('uploads/traker_images/').$request->tracker_id.'/';
-            if (!file_exists($app_path)) {
-                mkdir($app_path, 0777, true);
-            }
 
-        }else{
-            $app_path = storage_path('uploads/traker_images/');
-            if (is_dir($app_path)) {
-                mkdir($app_path, 0777, true);
-            }
+    public function stopTracker(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'traker_id' => 'required_without:tracker_id|integer',
+            'tracker_id' => 'required_without:traker_id|integer',
+            'time' => 'nullable|date',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->error($validator->errors()->first(), 422);
         }
-        $file_name =  $app_path.$file;
-        file_put_contents( $file_name, $image_base64);
-        $new = new TrackPhoto();
-        $new->track_id = $request->tracker_id;
-        $new->user_id  = $user->id;
-        $new->img_path  = 'uploads/traker_images/'.$request->tracker_id.'/'.$file;
-        $new->time  = $request->time;
-        $new->status  = 1;
-        $new->save();
-        return $this->success( [],'Uploaded successfully.');
+
+        $trackerId = $request->input('tracker_id', $request->input('traker_id'));
+
+        $tracker = TimeTracker::where('id', $trackerId)
+            ->where('created_by', auth()->id())
+            ->first();
+
+        if (!$tracker) {
+            return $this->error('Track not found', 404);
+        }
+
+        $tracker->end_time = $request->filled('time')
+            ? date('Y-m-d H:i:s', strtotime($request->input('time')))
+            : now();
+        $tracker->is_active = 0;
+        $tracker->total_time = Utility::diffance_to_time($tracker->start_time, $tracker->end_time);
+        $tracker->save();
+
+        return $this->success($tracker, 'Stop time successfully.');
     }
 
+    public function uploadImage(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'tracker_id' => 'required|integer',
+            'img' => 'required|string',
+            'imgName' => 'nullable|string|max:255',
+            'time' => 'nullable|date',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->error($validator->errors()->first(), 422);
+        }
+
+        $tracker = TimeTracker::where('id', $request->tracker_id)
+            ->where('created_by', auth()->id())
+            ->first();
+
+        if (!$tracker) {
+            return $this->error('Track not found', 404);
+        }
+
+        $encoded = preg_replace('#^data:image/[^;]+;base64,#', '', $request->img);
+        $imageBinary = base64_decode($encoded, true);
+
+        if ($imageBinary === false || strlen($imageBinary) > 8 * 1024 * 1024) {
+            return $this->error('Invalid image', 422);
+        }
+
+        $imageInfo = @getimagesizefromstring($imageBinary);
+        if ($imageInfo === false) {
+            return $this->error('Invalid image', 422);
+        }
+
+        $allowedTypes = [
+            IMAGETYPE_JPEG => 'jpg',
+            IMAGETYPE_PNG => 'png',
+            IMAGETYPE_WEBP => 'webp',
+        ];
+
+        if (!isset($allowedTypes[$imageInfo[2]])) {
+            return $this->error('Unsupported image format', 422);
+        }
+
+        $extension = $allowedTypes[$imageInfo[2]];
+        $file = Str::random(32) . '.' . $extension;
+        $relativeDir = 'uploads/traker_images/' . $tracker->id;
+        $absoluteDir = storage_path($relativeDir);
+
+        if (!is_dir($absoluteDir) && !mkdir($absoluteDir, 0755, true) && !is_dir($absoluteDir)) {
+            return $this->error('Unable to create image directory', 500);
+        }
+
+        $absolutePath = $absoluteDir . DIRECTORY_SEPARATOR . $file;
+
+        if (file_put_contents($absolutePath, $imageBinary) === false) {
+            return $this->error('Unable to save image', 500);
+        }
+
+        $photo = new TrackPhoto();
+        $photo->track_id = $tracker->id;
+        $photo->user_id = auth()->id();
+        $photo->img_path = $relativeDir . '/' . $file;
+        $photo->time = $request->time ?: now();
+        $photo->status = 1;
+        $photo->save();
+
+        return $this->success([], 'Uploaded successfully.');
+    }
+
+    private function canAccessProject($user, $projectId)
+    {
+        if ($user->isUser()) {
+            return ProjectUser::where('project_id', $projectId)
+                ->where('user_id', $user->id)
+                ->exists();
+        }
+
+        return Project::where('id', $projectId)
+            ->where('created_by', $user->id)
+            ->exists();
+    }
 }
