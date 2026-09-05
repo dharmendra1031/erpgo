@@ -1,0 +1,3 @@
+# Keep packaged archives out of the repository.
+*.zip
+*.ZIP

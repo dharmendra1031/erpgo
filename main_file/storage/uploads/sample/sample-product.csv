@@ -1,0 +1,3 @@
+Name,SKU,Sale_Price,Purchase_Price,Quantity,Tax,Category,Unit,Type,Description
+Product123,,10,100,150,10,CGST;SGST,category123,PCS,product,test description
+

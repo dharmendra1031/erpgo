@@ -1,0 +1,99 @@
+table tbody {
+    background: #162e4d;
+}
+.card table tr td h4 {
+    font-size: 12px;
+    color: #d5d5d5;
+    font-family: 'Montserrat-SemiBold' !important;
+}
+.report-text {
+    color: #d5d5d5;
+    font-family: 'Montserrat-SemiBold' !important;
+    font-size: 12px;
+    font-weight: normal;
+}
+.application .navbar {
+    border-bottom: 1px solid #12263f;
+}
+.small-title {
+    padding: 15px;
+    border: 15px;
+    font-size: 20px;
+    color: #a1aec7;
+    border-radius: 0 0 20px 20px;
+    box-shadow: 0 0 49px rgb(105 105 105 / 9%);
+}
+.table tr {
+    background: #142b49;
+
+}
+.table td {
+    background: #142b49;
+
+}
+
+.table thead {
+    background: #142b49;
+}
+.table-responsive {
+    background: #142b49;
+    /* box-shadow: 0 31px 49px rgb(105 105 105 / 9%); */
+    padding-bottom: 0;
+    border-radius: 20px;
+}
+.sorting {
+    color: #a1aec7;
+}
+.sorting_asc{
+    color: #a1aec7;
+}
+.page-title h5, .h4 {
+    color: #7a8cac;
+    font-weight: normal;
+}
+.nav-link pr-lg-0{
+    background: #142b49;
+}
+
+ul.navbar-nav .dropdown-animate a {
+    background: #162e4d;
+    border-radius: 15px !important;
+    padding: 10px 20px !important;
+    box-shadow: 0 31px 49px rgb(105 105 105 / 9%);
+    font-size: 12px;
+    color: #061737;
+    font-weight: 600;
+}
+.fa-globe-europe{
+    color: #dee3ee;
+}
+
+.number-icon {
+    color: #b2c1da;
+    font-size: 25px;
+    font-weight: 600;
+    float: left;
+    width: 70px;
+    text-align: center;
+    padding-top: 2px;
+}
+
+.table th {
+    color: #b2c1da;
+}
+
+.last-day-text {
+    color: #a1aec7;
+    font-size: 14px;
+    font-family: 'Montserrat-SemiBold' !important;
+    font-weight: normal;
+    float: right;
+    padding-top: 10px;
+}
+.form .form-control-label {
+    color: #bbbec7 !important;
+}
+
+.setting-card .form-group .form-control-label, .company-setting .form-group .form-control-label, .invoice-card label, .modal form .form-control-label {
+    color: #b2c1da !important;
+}
