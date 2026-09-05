@@ -1,0 +1,33 @@
+name: Production Readiness Static Checks
+
+on:
+  push:
+    branches:
+      - hardening/production-readiness
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.0
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.0'
+          coverage: none
+
+      - name: PHP syntax lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          find main_file/app main_file/routes main_file/config main_file/database -type f -name '*.php' -print0 \
+            | xargs -0 -n1 php -l >/tmp/php-lint.log
+          cat /tmp/php-lint.log
+
+      - name: Route controller integrity
+        run: python3 main_file/scripts/ci_route_integrity.py
