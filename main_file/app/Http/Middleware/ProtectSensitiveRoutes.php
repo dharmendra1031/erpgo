@@ -12,8 +12,8 @@ class ProtectSensitiveRoutes
 {
     /**
      * Legacy ERPGo contains a number of internal routes without route-level
-     * authentication. Keep public payment/form/career routes untouched and
-     * centrally require authentication for known internal mutation/data paths.
+     * authentication. Keep intentionally public invoice/form/career callbacks
+     * untouched and centrally require authentication for known internal paths.
      */
     public function handle(Request $request, Closure $next)
     {
@@ -73,6 +73,13 @@ class ProtectSensitiveRoutes
             'projects/*/change/*',
             'calendar/*/drag',
             'project-task-stages/order',
+            'plan/paystack/*',
+            'plan/flaterwave/*',
+            'plan/razorpay/*',
+            'plan/mercado/*',
+            'plan/mollie/*',
+            'plan/skrill/*',
+            'plan/coingate/*',
         ];
 
         foreach ($patterns as $pattern) {
